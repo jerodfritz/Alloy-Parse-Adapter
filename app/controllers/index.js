@@ -34,20 +34,20 @@ books.on("fetch", function() {
 
 books.fetch(debug_responses); // Freshen Table
 
+
 var book = Alloy.createModel('Book', {
   book : "Jungle Book",
   author : "Kipling"
 });
 book.save(debug_responses);
+Ti.API.info(JSON.stringify(book));
 
-//books.fetch(debug_responses); // Freshen Table
-
+books.fetch(debug_responses); // Freshen Table
 book.save(_.extend({
   author : 'Kipling II'
 },debug_responses));
 
 books.fetch(debug_responses); // Freshen Table
-
 /*
 // Now we can add items to the model.
 var book = Alloy.createModel('Book', {

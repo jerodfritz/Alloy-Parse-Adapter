@@ -14,10 +14,7 @@ function InitAdapter(config) {
 }
 
 function Sync(model, method, opts) {
-  Ti.API.info("model get objectId " + model.get('objectId'));
-  Ti.API.info("model get id " + model.get('id'));
-  Ti.API.info("model id " + model.id);
-  var object_id = model.id || opts.id || model.get('id') || model.get('objectId') ;
+  var object_id = model.id || opts.id;
   var application_id = Ti.App.Properties.getString('PARSE_APP_ID') || model.config.settings.PARSE_APP_ID;
   var rest_api_key = Ti.App.Properties.getString('PARSE_REST_API_KEY') || model.config.settings.PARSE_REST_API_KEY;
   var api_version = Ti.App.Properties.getString('PARSE_API_VERSION') || model.config.settings.PARSE_API_VERSION;
@@ -64,10 +61,9 @@ function Sync(model, method, opts) {
           switch(method){
             case 'create':
               if (!model.id) {
-                Ti.API.info("Need to set the model.id to " + response.objectId)
                 model.id = response.objectId;
-                model.set('objectId', model.id);
-              }    
+                model.set(model.idAttribute, model.id);
+              }
               break;
             case 'read': // Return the results array specifically on read operations
               if(!response.objectId){
@@ -76,7 +72,9 @@ function Sync(model, method, opts) {
                   response.results[i].id = response.results[i].objectId;
                   returnData.push(response.results[i]);
                 }
-                  
+              } else {
+                model.id = response.objectId;
+                model.set(model.idAttribute, model.id);
               }
               model.trigger("fetch");
               break;
