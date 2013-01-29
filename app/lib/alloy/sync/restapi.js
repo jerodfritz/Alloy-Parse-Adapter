@@ -1,113 +1,176 @@
-
-/*
- Method to HTTP Type Map
- */
-var methodMap = {
-  'create' : 'POST',
-  'update' : 'PUT',
-  'delete' : 'DELETE',
-  'read' : 'GET'
-};
+//
+// blog.clearlyionnovative.com
+// twitter: @aaronksaunders
+//
+//
 
 function InitAdapter(config) {
- //
+    return {};
 }
 
-function Sync(model, method, opts) {
-  var object_id = model.id || opts.id;
-  var application_id = Ti.App.Properties.getString('PARSE_APP_ID') || model.config.settings.PARSE_APP_ID;
-  var rest_api_key = Ti.App.Properties.getString('PARSE_REST_API_KEY') || model.config.settings.PARSE_REST_API_KEY;
-  var api_version = Ti.App.Properties.getString('PARSE_API_VERSION') || model.config.settings.PARSE_API_VERSION;
-  var class_name = model.config.settings.class_name;
+function apiCall(_options, _callback) {
 
-  // create request parameteres
-  var type = methodMap[method];
-  opts || ( opts = {});
-  var base_url = "https://api.parse.com/" + api_version + "/classes";
-  var url = base_url + "/" + class_name + "/";
-  if (object_id) {
-    url = url + object_id;
-    switch(method){
-      case 'create':
-        type = methodMap['update'];
-      break;
-    }
-  }
-  
+    var xhr = Ti.Network.createHTTPClient({
+        timeout : 5000
+    });
 
-  //Setup data
-  var data = false;
-  if (!opts.data && model && (method == 'create' || method == 'update')) {
-    data = JSON.stringify(model.toJSON());
-  } else if (opts.query && method == "read") { //https://www.parse.com/docs/rest#queries
-    var query = "?where=" + JSON.stringify(opts.query);
-    url += query;
-  }
+    //Prepare the request
+    xhr.open(_options.type, _options.url);
 
-  var xhr = Titanium.Network.createHTTPClient();
-  
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState === 4) {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        var response;
+    xhr.onload = function() {
+
+        var data = null;
+
         try {
-          response = JSON.parse(xhr.responseText);
-        } catch (e) {
-          Ti.API.info("parse.js : Response Parse Exception")
-          opts.error && opts.error(e);
+            data = JSON.parse(xhr.responseText);
+        } catch (EE) {
         }
-        if (response) {
-          var returnData = response; 
-          switch(method){
-            case 'create':
-              if (!model.id) {
-                model.id = response.objectId;
-                model.set(model.idAttribute, model.id);
-              }
-              break;
-            case 'read': // Return the results array specifically on read operations
-              if(!response.objectId){
-                returnData = [];
-                for (var i in response.results) {
-                  response.results[i].id = response.results[i].objectId;
-                  returnData.push(response.results[i]);
-                }
-              } else {
-                model.id = response.objectId;
-                model.set(model.idAttribute, model.id);
-              }
-              model.trigger("fetch");
-              break;
-            default:
-              //returnData = response;
-              break;
-          }
-          opts.success && opts.success(returnData);
-        }
-      } else {
-        Ti.API.info("parse.js : Error HTTP Status " + xhr.status + " : " + xhr.responseText)
-        opts.error && opts.error(xhr.responseText);
-      }
+        _callback({
+            success : true,
+            text : xhr.responseText || null,
+            data : data || null
+        });
+    };
+
+    //Handle error
+    xhr.onerror = function() {
+        _callback({
+            'success' : false,
+            'text' : xhr.responseText
+        });
+        Ti.API.error('fetch apiCall ERROR: ' + xhr.responseText)
     }
-  };
-  Ti.API.info("------------");
-  Ti.API.info("model: " + JSON.stringify(model.toJSON()));
-  Ti.API.info("method: " + method);
-  Ti.API.info("opts:" + JSON.stringify(opts));
-  Ti.API.info("object_id: " + object_id)
-  Ti.API.info("data:" + data);
-  Ti.API.info("type:" + type);
-  Ti.API.info("url:" + url);
-  
-  xhr.open(type, url, true);
-  xhr.setRequestHeader("Content-Type", "application/json");
-  xhr.setRequestHeader("X-Parse-Application-Id",application_id);
-  xhr.setRequestHeader("X-Parse-REST-API-Key",rest_api_key);
-  xhr.send(data);
+    for (var header in _options.headers) {
+        xhr.setRequestHeader(header, _options.headers[header]);
+    }
+
+    if (_options.beforeSend) {
+        _options.beforeSend(xhr);
+    }
+
+    xhr.send(_options.data || {});
 }
 
-module.exports.sync = Sync, module.exports.beforeModelCreate = function(config) {
-    return config = config || {}, config.data = {}, InitAdapter(config), config;
-}, module.exports.afterModelCreate = function(Model) {
-    return Model = Model || {}, Model.prototype.config.Model = Model, Model;
+function Sync(model, method, opts) { debugger;
+
+    var methodMap = {
+        'create' : 'POST',
+        'read' : 'GET',
+        'update' : 'PUT',
+        'delete' : 'DELETE'
+    };
+
+    var type = methodMap[method];
+    var params = _.extend({}, opts);
+    params.type = type;
+
+    //set default headers
+    params.headers = params.headers || {};
+
+    // We need to ensure that we have a base url.
+    if (!params.url) {
+        params.url = model.url();
+        if (!params.url) {
+            Ti.API.error("fetch ERROR: NO BASE URL");
+            return;
+        }
+    }
+
+    // For older servers, emulate JSON by encoding the request into an HTML-form.
+    if (Alloy.Backbone.emulateJSON) {
+        params.contentType = 'application/x-www-form-urlencoded';
+        params.processData = true;
+        params.data = params.data ? {
+            model : params.data
+        } : {};
+    }
+
+    // For older servers, emulate HTTP by mimicking the HTTP method with `_method`
+    // And an `X-HTTP-Method-Override` header.
+    if (Alloy.Backbone.emulateHTTP) {
+        if (type === 'PUT' || type === 'DELETE') {
+            if (Alloy.Backbone.emulateJSON)
+                params.data._method = type;
+            params.type = 'POST';
+            params.beforeSend = function(xhr) {
+                params.headers['X-HTTP-Method-Override'] = type
+            };
+        }
+    }
+
+    //json data transfers
+    params.headers['Content-Type'] = 'application/json';
+
+    /*
+     *
+     */
+    var callbackOptions = function(_resp) {
+        if (_resp.success) {
+            params.success(_resp.data || _resp.text, _resp.text);
+        } else {
+            params.error(JSON.parse(_resp.text), _resp.text);
+            Ti.API.error(" ERROR: " + _resp.text);
+            model.trigger("error");
+        }
+    };
+
+    if (!opts.data && model && (method == 'create' || method == 'update')) {
+        params.data = JSON.stringify(model.toJSON());
+    } else if (opts.data) {
+        // add any of the extras as parameters on the URL,
+        // this content should be JSON objects converted
+        // to strings
+        var query = "";
+        for (var i in opts.data) {
+            query += i + "=" + opts.data[i] + "&";
+        }
+
+        // add the params, remove trailing "&"
+        params.url += "?" + query.substring(0, query.length - 1);
+
+        Ti.API.debug('THE URL ' + params.url);
+
+        // no data, it is all on URL
+        params.data = {};
+    }
+
+    switch (method) {
+        case "delete":
+        case "update":
+            apiCall(params, function(_r) {
+                callbackOptions(_r);
+                _r ? model.trigger("fetch change sync") : model.trigger("error");
+            });
+            break;
+        case "create":
+            apiCall(params, function(_r) {
+                callbackOptions(_r);
+                _r ? model.trigger("fetch sync") : model.trigger("error");
+            });
+            break;
+        case "read":
+            apiCall(params, function(_r) {
+                callbackOptions(_r);
+                _r ? model.trigger("fetch sync") : model.trigger("error");
+            });
+            break;
+    }
+
+};
+
+//we need underscore
+var _ = require("alloy/underscore")._;
+
+module.exports.sync = Sync;
+
+module.exports.beforeModelCreate = function(config) {
+    config = config || {};
+    InitAdapter(config);
+    return config;
+};
+
+module.exports.afterModelCreate = function(Model) {
+    Model = Model || {};
+    Model.prototype.config.Model = Model;
+    return Model;
 };
