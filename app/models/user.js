@@ -17,7 +17,7 @@ exports.definition = {
         "defaults" : {},
         "adapter" : {
             "type" : "restapi",
-            "collection_name" : "Books",
+            "collection_name" : "User",
         },
         "settings" : {
             headers : {
@@ -25,17 +25,17 @@ exports.definition = {
                 "X-Parse-REST-API-Key" : '3vt0buEpMRbIQ6p8OWVwBvgt6ZEKQN5rdjmiqmqR',
             },
             PARSE_API_VERSION : '1',
-            class_name : "Books"
+            class_name : "users"
         },
         _url : function(_model) {
-            var base_url = "https://api.parse.com/" + this.settings.PARSE_API_VERSION + "/classes";
+            var base_url = "https://api.parse.com/" + this.settings.PARSE_API_VERSION;
             return base_url + "/" + this.settings.class_name + "/" + (_model && _model.id || "");
 
         }
     },
     /**
      *
-     * BOOK MODEL
+     * USER MODEL
      *
      */
     extendModel : function(Model) {
@@ -45,6 +45,7 @@ exports.definition = {
              * construct the proper URL
              */
             url : function() {
+                debugger;
                 var model = this;
                 return this.config._url(model);
             },
@@ -53,15 +54,34 @@ exports.definition = {
              * the data, it would be done here
              */
             parse : function(_response) { debugger;
+                // ALWAYS delete the returned password
+                delete _response["password"];
+                delete this.attributes["password"];
                 return _response;
             },
+            /**
+             * 
+             */
+            login : function(_opts) { debugger;
+
+                var model = this;
+                
+                // change the url since we are logging in
+                _opts.url = "https://api.parse.com/" + this.config.settings.PARSE_API_VERSION + "/login";
+                _opts.data = {
+                    "username" : this.get("username"),
+                    "password" : this.get("password"),
+                };
+                model.fetch(_opts);
+                return
+            }
         });
         // end extend
         return Model;
     },
     /**
      *
-     * BOOK COLLECTION
+     * USER COLLECTION
      *
      */
     extendCollection : function(Collection) {
